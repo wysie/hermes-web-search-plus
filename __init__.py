@@ -1,11 +1,11 @@
 """
-web-search-plus — Hermes Plugin v1.6.1
-Multi-provider web search and URL extraction with intelligent auto-routing.
+web-search-plus — Hermes Plugin v1.7.0
+Multi-provider web search, URL extraction, quality reports, and opt-in research mode.
 Ported from robbyczgw-cla/web-search-plus-plugin (OpenClaw) to Hermes Plugin API.
 """
 from __future__ import annotations
 
-__version__ = "1.6.1"
+__version__ = "1.7.0"
 
 import json
 import os
@@ -64,6 +64,9 @@ def _run_search(
     time_range: Optional[str] = None,
     include_domains: Optional[List[str]] = None,
     exclude_domains: Optional[List[str]] = None,
+    mode: str = "normal",
+    quality_report: bool = False,
+    research_time_budget: float = 55.0,
 ) -> dict:
     """Call search.py subprocess and return parsed JSON result."""
     cmd = [
@@ -82,6 +85,10 @@ def _run_search(
         cmd += ["--include-domains"] + include_domains
     if exclude_domains:
         cmd += ["--exclude-domains"] + exclude_domains
+    if mode != "normal":
+        cmd += ["--mode", mode, "--research-time-budget", str(research_time_budget)]
+    if quality_report:
+        cmd.append("--quality-report")
 
     env = os.environ.copy()
 
@@ -174,6 +181,30 @@ def _format_results(data: dict) -> str:
     if answer:
         lines.append(f"\nAnswer: {answer}\n")
 
+    quality_report = data.get("quality_report") or {}
+    if quality_report:
+        lines.append(
+            "Quality: "
+            f"{quality_report.get('confidence', 'unknown')} confidence | "
+            f"{quality_report.get('domain_count', 0)} domains | "
+            f"{quality_report.get('duplicate_count', 0)} duplicates | "
+            f"extract recommended: {quality_report.get('extract_recommended', False)}"
+        )
+        if quality_report.get("extract_reasons"):
+            lines.append("Quality reasons: " + ", ".join(quality_report["extract_reasons"]))
+        lines.append("")
+
+    source_summaries = data.get("source_summaries") or []
+    if source_summaries:
+        lines.append("Extracted source summaries:")
+        for i, src in enumerate(source_summaries, 1):
+            url = src.get("url", "")
+            content = (src.get("content") or src.get("raw_content") or "").strip()
+            lines.append(f"{i}. {url}")
+            if content:
+                lines.append(f"   {content[:500]}")
+        lines.append("")
+
     for i, r in enumerate(results, 1):
         title = r.get("title", "No title")
         url = r.get("url", "")
@@ -265,6 +296,24 @@ def register(ctx: Any) -> None:
                     "items": {"type": "string"},
                     "description": "Blacklist specific domains (e.g. ['reddit.com']). Optional.",
                 },
+                "mode": {
+                    "type": "string",
+                    "enum": ["normal", "research"],
+                    "description": "normal = fast routed search; research = multi-provider search plus top-source extraction.",
+                    "default": "normal",
+                },
+                "quality_report": {
+                    "type": "boolean",
+                    "description": "Attach routing/result quality diagnostics such as selected provider, skips, dedup count, domain diversity, and extraction recommendation.",
+                    "default": False,
+                },
+                "research_time_budget": {
+                    "type": "number",
+                    "description": "Best-effort wall-clock budget in seconds for research mode. Checked between provider calls and before extraction.",
+                    "default": 55.0,
+                    "minimum": 1,
+                    "maximum": 75,
+                },
             },
             "required": ["query"],
         },
@@ -272,7 +321,8 @@ def register(ctx: Any) -> None:
 
     def handler(args_or_query, provider: str = "auto", count: int = 5, depth: str = "normal",
                 time_range: Optional[str] = None, include_domains: Optional[List[str]] = None,
-                exclude_domains: Optional[List[str]] = None, **kwargs) -> str:
+                exclude_domains: Optional[List[str]] = None, mode: str = "normal",
+                quality_report: bool = False, research_time_budget: float = 55.0, **kwargs) -> str:
         # Hermes registry passes the entire input dict as first positional arg
         if isinstance(args_or_query, dict):
             query = args_or_query.get("query", "")
@@ -282,6 +332,9 @@ def register(ctx: Any) -> None:
             time_range = args_or_query.get("time_range", time_range)
             include_domains = args_or_query.get("include_domains", include_domains)
             exclude_domains = args_or_query.get("exclude_domains", exclude_domains)
+            mode = args_or_query.get("mode", mode)
+            quality_report = args_or_query.get("quality_report", quality_report)
+            research_time_budget = args_or_query.get("research_time_budget", research_time_budget)
         else:
             query = args_or_query
         data = _run_search(
@@ -292,6 +345,9 @@ def register(ctx: Any) -> None:
             time_range=time_range,
             include_domains=include_domains,
             exclude_domains=exclude_domains,
+            mode=mode,
+            quality_report=quality_report,
+            research_time_budget=research_time_budget,
         )
         return _format_results(data)
 
