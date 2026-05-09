@@ -296,7 +296,7 @@ def _normalize_provider_name(provider: str) -> str:
 def _normalize_routing_provider(provider: str) -> str:
     """Normalize a provider that search.py can actually route to."""
     normalized = (provider or "").strip().lower()
-    if normalized == "kilo-perplexity":
+    if normalized in {"kilo-perplexity", "kilo_perplexity"}:
         normalized = "perplexity"
     if normalized not in _ROUTING_PROVIDER_NAMES:
         valid = ", ".join(sorted(_ROUTING_PROVIDER_NAMES))
@@ -358,8 +358,18 @@ def _merge_behavior_config(user_config: Mapping[str, Any]) -> Dict[str, Any]:
     return config
 
 
+def _unique_timestamped_path(path: Path, marker: str) -> Path:
+    base = path.with_name(path.name + f".{marker}-{int(time.time())}")
+    candidate = base
+    suffix = 2
+    while candidate.exists():
+        candidate = base.with_name(base.name + f"-{suffix}")
+        suffix += 1
+    return candidate
+
+
 def _quarantine_behavior_config(path: Path, reason: str) -> None:
-    broken = path.with_name(path.name + f".broken-{int(time.time())}")
+    broken = _unique_timestamped_path(path, "broken")
     try:
         path.rename(broken)
         print(f"warning: invalid config moved to {broken}: {reason}", file=sys.stderr)
@@ -404,7 +414,7 @@ def _write_behavior_config(path: Path, data: Mapping[str, Any], *, dry_run: bool
         print(rendered, end="")
         return
     if backup and path.exists():
-        backup_path = path.with_name(path.name + f".bak-{int(time.time())}")
+        backup_path = _unique_timestamped_path(path, "bak")
         shutil.copy2(path, backup_path)
         print(f"Backup written: {backup_path}")
     _atomic_write_json(path, data)

@@ -510,6 +510,18 @@ def test_config_routing_provider_alias_maps_kilo_perplexity_to_perplexity(tmp_pa
     assert data["default_provider"] == "perplexity"
 
 
+def test_config_routing_provider_alias_maps_kilo_underscore_perplexity_to_perplexity(tmp_path):
+    config_path = tmp_path / "config.json"
+    parser = wsp.argparse.ArgumentParser()
+    wsp._web_search_plus_cli_setup(parser)
+    args = parser.parse_args(["config", "set-default", "kilo_perplexity", "--config-path", str(config_path)])
+
+    args.func(args)
+
+    data = json.loads(config_path.read_text())
+    assert data["default_provider"] == "perplexity"
+
+
 def test_config_priority_rejects_non_routing_catalog_provider(tmp_path):
     config_path = tmp_path / "config.json"
     parser = wsp.argparse.ArgumentParser()
@@ -608,6 +620,21 @@ def test_search_load_config_quarantines_invalid_threshold(tmp_path, monkeypatch)
     assert list(tmp_path.glob("config.json.broken-*"))
 
 
+def test_search_load_config_keeps_multiple_quarantines_in_same_second(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.json"
+    monkeypatch.setenv("WEB_SEARCH_PLUS_CONFIG", str(config_path))
+    monkeypatch.setattr(search.time, "time", lambda: 12345)
+
+    config_path.write_text('{"version": 1, "default_provider": "google"}\n')
+    search.load_config()
+    config_path.write_text('{"version": 1, "auto_routing": {"confidence_threshold": 2}}\n')
+    search.load_config()
+
+    broken_files = sorted(p.name for p in tmp_path.glob("config.json.broken-*"))
+    assert len(broken_files) == 2
+    assert broken_files[0] != broken_files[1]
+
+
 def test_search_load_config_normalizes_kilo_perplexity_alias(tmp_path, monkeypatch):
     config_path = tmp_path / "config.json"
     config_path.write_text('{"version": 1, "default_provider": "kilo-perplexity", "auto_routing": {"enabled": false, "provider_priority": ["kilo-perplexity"]}}\n')
@@ -617,4 +644,17 @@ def test_search_load_config_normalizes_kilo_perplexity_alias(tmp_path, monkeypat
 
     assert config["default_provider"] == "perplexity"
     assert config["auto_routing"]["provider_priority"] == ["perplexity"]
+    assert not list(tmp_path.glob("config.json.broken-*"))
+
+
+def test_search_load_config_normalizes_kilo_underscore_perplexity_alias(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.json"
+    config_path.write_text('{"version": 1, "default_provider": "kilo_perplexity", "auto_routing": {"enabled": false, "provider_priority": ["kilo_perplexity"], "fallback_provider": "kilo_perplexity"}}\n')
+    monkeypatch.setenv("WEB_SEARCH_PLUS_CONFIG", str(config_path))
+
+    config = search.load_config()
+
+    assert config["default_provider"] == "perplexity"
+    assert config["auto_routing"]["provider_priority"] == ["perplexity"]
+    assert config["auto_routing"]["fallback_provider"] == "perplexity"
     assert not list(tmp_path.glob("config.json.broken-*"))

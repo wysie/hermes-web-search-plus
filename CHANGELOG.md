@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### 🐛 Fixed
+- Accept both `kilo-perplexity` and `kilo_perplexity` as routing aliases for the Perplexity/Kilo bridge in setup and runtime config loading.
+- Prevent same-second config quarantine/backup filename collisions from overwriting earlier broken-config artifacts.
+
+### 🧪 Tests
+- Added regression coverage for underscore Kilo/Perplexity aliases and repeated same-second runtime config quarantines.
+
 ## [v1.9.0] — 2026-05-09
 
 ### ✨ Added

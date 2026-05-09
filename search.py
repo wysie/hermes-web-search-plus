@@ -356,7 +356,7 @@ _ROUTING_PROVIDER_NAMES = {"tavily", "linkup", "querit", "exa", "firecrawl", "pe
 
 def _normalize_routing_provider_config(provider: str) -> str:
     normalized = (provider or "").strip().lower()
-    if normalized == "kilo-perplexity":
+    if normalized in {"kilo-perplexity", "kilo_perplexity"}:
         normalized = "perplexity"
     if normalized not in _ROUTING_PROVIDER_NAMES:
         raise ValueError(f"unknown routing provider: {provider}")
@@ -412,8 +412,18 @@ def _validate_runtime_config(config: Dict[str, Any]) -> Dict[str, Any]:
     return config
 
 
+def _unique_timestamped_path(path: Path, marker: str) -> Path:
+    base = path.with_name(path.name + f".{marker}-{int(time.time())}")
+    candidate = base
+    suffix = 2
+    while candidate.exists():
+        candidate = base.with_name(base.name + f"-{suffix}")
+        suffix += 1
+    return candidate
+
+
 def _quarantine_runtime_config(config_path: Path, reason: str) -> None:
-    broken = config_path.with_name(config_path.name + f".broken-{int(time.time())}")
+    broken = _unique_timestamped_path(config_path, "broken")
     try:
         config_path.rename(broken)
         print(json.dumps({
