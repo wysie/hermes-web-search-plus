@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [v1.9.0] — 2026-05-09
 
 ### ✨ Added
 - Added provider-behavior onboarding commands under `setup.py config` so users can choose fixed-provider mode, re-enable auto-routing, set routing priority, set fallback provider, disable/enable providers, tune confidence threshold, and reset config with backup.
