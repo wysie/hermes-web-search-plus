@@ -459,6 +459,7 @@ def _web_search_plus_cli_setup(parser: argparse.ArgumentParser) -> None:
     subs = parser.add_subparsers(dest="web_search_plus_command")
     status = subs.add_parser("status", help="Show a setup dashboard without printing secrets")
     status.add_argument("--plain", action="store_true", help="Print compact legacy text instead of the dashboard")
+    status.add_argument("--env-path", help="Override Hermes .env path for status checks")
     setup = subs.add_parser("setup", help="Run the provider-key setup wizard")
     setup.add_argument("providers", nargs="*", help="Provider names to configure (overrides --preset)")
     setup.add_argument("--preset", default="all", help="starter, lean, search, extract, or all (default: all)")
@@ -478,7 +479,9 @@ def _web_search_plus_cli_command(args: Any) -> None:
         return
 
     if command == "status":
-        print(_render_setup_guidance(fancy=not getattr(args, "plain", False)))
+        env_path = getattr(args, "env_path", None)
+        env = _read_env_file(Path(env_path)) if env_path else None
+        print(_render_setup_guidance(env=env, fancy=not getattr(args, "plain", False)))
         return
 
     if command == "setup":
